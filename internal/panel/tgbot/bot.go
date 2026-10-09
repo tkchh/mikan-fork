@@ -571,6 +571,20 @@ func (b *Bot) onMessage(ctx context.Context, out *Outbox, m *Message) {
 	switch {
 	case strings.HasPrefix(text, "/start "):
 		notice = b.linkByCode(ctx, out, w, chat, who(m.From), strings.TrimSpace(strings.TrimPrefix(text, "/start ")))
+	case text == "/freeturn":
+		out.Reply(chat, "menu:"+strconv.FormatInt(chat, 10), 2, func(ctx context.Context, c *Client) error {
+			text, kb := b.screen(ctx, b.Config(ctx), chat, "ft", "")
+			sent, err := c.Send(ctx, chat, text, kb, false)
+			if err != nil {
+				return err
+			}
+			if old, err := b.d.Store.Q.GetTgChat(ctx, chat); err == nil && old.MenuMsgID != 0 && old.MenuMsgID != sent.MessageID {
+				_ = c.Delete(ctx, chat, old.MenuMsgID)
+			}
+			_ = b.d.Store.Q.SetTgMenu(ctx, db.SetTgMenuParams{MenuMsgID: sent.MessageID, TgID: chat})
+			return nil
+		})
+		return
 	default:
 		notice = b.linkByAddress(ctx, out, w, chat, who(m.From), text)
 	}

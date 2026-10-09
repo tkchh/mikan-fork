@@ -175,6 +175,12 @@ func (h *handlers) nodeHealth(ctx context.Context, in *nodeHealthInput) (*nodeOu
 	if v.Listeners == nil {
 		v.Listeners = []nodeapi.ListenerStatus{}
 	}
+	if nft, err := h.d.Store.Q.GetNodeFreeTurn(ctx, in.ID); err == nil {
+		v.Listeners = append(v.Listeners, nodeapi.ListenerStatus{
+			Name: "freeturn",
+			OK:   nft.Enabled != 0,
+		})
+	}
 	out.Body = v
 	return out, nil
 }

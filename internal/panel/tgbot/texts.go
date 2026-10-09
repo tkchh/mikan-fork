@@ -18,6 +18,7 @@ type words struct {
 	forever, termUntil, noLimit, trafficOf, trafficNoLimit, resets     string
 	devicesNone, devicesOff, devicesNote, confirmUnbind, unbound, wait string
 	connectText, linked, alreadyLinked, linkExpired, linkInvalid       string
+	freeturnTitle, freeturnConnect, freeturnDocCaption, freeturnDocSent string
 	linkLimit, noSub, sharedPlace, device, justNow                     string
 	// Taking a subscription off the Telegram account: it keeps working in the apps.
 	removeSub, confirmRemove, yesRemove, removed string
@@ -68,7 +69,11 @@ var ru = words{
 	yesRemove:         "✅ Да, убрать",
 	removed:           "✅ Подписка «%s» убрана из бота.",
 	wait:              "⏳ Следующее устройство можно отвязать %s.",
-	connectText:       "1. Установите приложение: Happ (iPhone, Android), ClashFest (Android), Koala Clash (Windows), SlothClash (Windows, Mac, Linux) или другое со страницы подписки.\n2. Добавьте в него ссылку:\n<code>%s</code>\n\nНа странице подписки — кнопки «Добавить» для всех приложений.",
+	connectText:       "1. Установите приложение: Happ (iPhone, Android), ClashFest (Android), Koala Clash (Windows), SlothClash (Windows, Mac, Linux) или другое со страницы подписки.\n2. Добавьте в него ссылку:\n<code>%s</code>\n\nНа странице подписки — кнопки «Добавить» для всех приложений.\n\n🛡 Для Android также доступен <b>FreeTurn</b> (обход блокировок звонков и мессенджеров через WebRTC TURN-прокси). Нажмите кнопку «FreeTurn» ниже.",
+	freeturnTitle:      "🛡 FreeTurn (Android)",
+	freeturnConnect:    "<b>🛡 FreeTurn · VK TURN Proxy</b>\n\nОбход блокировок звонков и мессенджеров (Telegram, WhatsApp и др.) через WebRTC TURN-прокси и обфускацию WireGuard.\n\n<b>Инструкция по настройке:</b>\n1. Установите приложение FreeTurn для Android (скачайте APK по кнопке ниже).\n2. Скопируйте ссылку на подписку FreeTurn или прямую ссылку:\n\n<b>Ссылка на подписку FreeTurn:</b>\n<code>%s</code>\n\n<b>Прямая ссылка FreeTurn:</b>\n<code>%s</code>\n\n3. Вставьте ссылку в приложение или импортируйте файл конфигурации WireGuard (.conf).\n4. Включите подключение.\n\n⚠️ <i>Обратите внимание: один профиль FreeTurn рассчитан на одно активное устройство WireGuard одновременно.</i>",
+	freeturnDocCaption: "🛡 Конфигурация WireGuard для FreeTurn (%s)\n⚠️ Один профиль рассчитан на 1 устройство одновременно.",
+	freeturnDocSent:    "✅ Файл конфигурации WireGuard (.conf) отправлен в чат.",
 	linked:            "✅ Подписка «%s» подключена.",
 	alreadyLinked:     "Подписка «%s» уже здесь.",
 	linkExpired:       "Ссылка устарела. Обновите страницу подписки и нажмите «Открыть в Telegram» ещё раз.",
@@ -148,7 +153,11 @@ var en = words{
 	yesRemove:         "✅ Yes, remove",
 	removed:           "✅ The subscription “%s” is removed from the bot.",
 	wait:              "⏳ You can unbind the next device %s.",
-	connectText:       "1. Install an app: Happ (iPhone, Android), ClashFest (Android), Koala Clash (Windows), SlothClash (Windows, Mac, Linux) or another from the subscription page.\n2. Add this link to it:\n<code>%s</code>\n\nThe subscription page has “Add” buttons for every app.",
+	connectText:       "1. Install an app: Happ (iPhone, Android), ClashFest (Android), Koala Clash (Windows), SlothClash (Windows, Mac, Linux) or another from the subscription page.\n2. Add this link to it:\n<code>%s</code>\n\nThe subscription page has “Add” buttons for every app.\n\n🛡 For Android, <b>FreeTurn</b> is also available (bypasses voice/video call blocks via WebRTC TURN proxy). Tap the “FreeTurn” button below.",
+	freeturnTitle:      "🛡 FreeTurn (Android)",
+	freeturnConnect:    "<b>🛡 FreeTurn · VK TURN Proxy</b>\n\nBypass voice and video call blocks (Telegram, WhatsApp, etc.) via WebRTC TURN proxy and obfuscated WireGuard.\n\n<b>Setup Instructions:</b>\n1. Install the FreeTurn app for Android (download APK via the button below).\n2. Copy the FreeTurn subscription link or direct link:\n\n<b>FreeTurn subscription link:</b>\n<code>%s</code>\n\n<b>FreeTurn direct link:</b>\n<code>%s</code>\n\n3. Paste the link into the app or import the WireGuard .conf configuration file.\n4. Connect.\n\n⚠️ <i>Note: One FreeTurn profile is designed for one active WireGuard device at a time.</i>",
+	freeturnDocCaption: "🛡 WireGuard configuration for FreeTurn (%s)\n⚠️ One profile is designed for 1 device at a time.",
+	freeturnDocSent:    "✅ WireGuard .conf configuration file has been sent to the chat.",
 	linked:            "✅ Subscription “%s” is connected.",
 	alreadyLinked:     "Subscription “%s” is already here.",
 	linkExpired:       "The link has expired. Reload the subscription page and tap “Open in Telegram” again.",

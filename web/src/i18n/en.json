@@ -797,7 +797,12 @@
       "exemptHint": "The torrent blocker leaves this client alone.",
       "recent": "Latest catches",
       "none": "No torrents caught."
-    }
+    },
+    "freeturnTitle": "FreeTurn · WireGuard",
+    "freeturnReset": "Reset FreeTurn keys",
+    "freeturnResetConfirm": "Reset FreeTurn keys?",
+    "freeturnResetText": "New WireGuard keys and Client ID will be generated for FreeTurn. The user will need to refresh their configuration.",
+    "freeturnResetDone": "FreeTurn keys regenerated"
   },
   "tariffs": {
     "subtitle": "Templates for granting access in one click. Changing a plan does not touch subscriptions already issued.",
@@ -1852,7 +1857,8 @@
     "promoCurrency": "Order currency does not match the promo",
     "promoNotDiscount": "This promo code cannot be applied to a payment",
     "promoSubscription": "An active subscription is required",
-    "promoNoExpiry": "The subscription has no end date"
+    "promoNoExpiry": "The subscription has no end date",
+    "freeturnWarning": "⚠️ Note: One FreeTurn profile is designed for one active WireGuard device at a time."
   },
   "nodes": {
     "subtitle": "Servers that run the VPN. The subscription includes the protocols of every enabled node, each in its own group.",

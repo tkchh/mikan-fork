@@ -620,3 +620,16 @@ func FreeName(existing []db.Inbound, base string) string {
 	}
 	return name
 }
+
+// FreeTurnInboundBaseID is the base synthetic inbound ID for FreeTurn inbounds.
+const FreeTurnInboundBaseID int64 = 990000
+
+// FreeTurnInboundID returns the synthetic inbound ID for FreeTurn on the given node.
+func FreeTurnInboundID(nodeID int64) int64 {
+	return FreeTurnInboundBaseID + nodeID
+}
+
+// IsFreeTurnInbound reports whether id belongs to the FreeTurn inbound ID range.
+func IsFreeTurnInbound(id int64) bool {
+	return id >= FreeTurnInboundBaseID && id < FreeTurnInboundBaseID+1000
+}

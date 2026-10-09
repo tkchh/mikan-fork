@@ -242,7 +242,7 @@ func (s *Syncer) desired(ctx context.Context) (nodeapi.DesiredState, error) {
 	st.Torrent = snap.torrent.Block()
 	st.Filters = snap.filters.State()
 	st.Epoch, st.Policies, _ = s.policiesFrom(snap)
-	if st.FreeTurn, err = s.freeturn(ctx, n); err != nil {
+	if st.FreeTurn, err = s.freeturn(ctx, n, snap); err != nil {
 		return st, err
 	}
 	return st, nil
@@ -806,7 +806,7 @@ func (s *Syncer) warp(ctx context.Context, n db.Node, inbounds []db.Inbound) (*n
 }
 
 // freeturn is the node's FreeTurn (vk-turn-proxy) sidecar and WireGuard configuration, nil when disabled.
-func (s *Syncer) freeturn(ctx context.Context, n db.Node) (*nodeapi.FreeTurnConfig, error) {
+func (s *Syncer) freeturn(ctx context.Context, n db.Node, snap *snapshot) (*nodeapi.FreeTurnConfig, error) {
 	ft, err := s.m.st.Q.GetNodeFreeTurn(ctx, n.ID)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && ft.Enabled == 0) {
 		return nil, nil
@@ -818,14 +818,37 @@ func (s *Syncer) freeturn(ctx context.Context, n db.Node) (*nodeapi.FreeTurnConf
 	if err != nil {
 		return nil, err
 	}
+	userMap := make(map[int64]db.User, len(snap.users))
+	for _, u := range snap.users {
+		userMap[u.ID] = u
+	}
+	now := s.m.now()
+	grants := snap.grants
+	ftInboundID := domain.FreeTurnInboundID(n.ID)
+
 	nodePeers := make([]nodeapi.FreeTurnPeer, len(peers))
 	for i, p := range peers {
+		allowed := false
+		if u, ok := userMap[p.UserID]; ok {
+			userGrants := grants.Main(u.ID)
+			state := domain.State(u, userGrants, now)
+			if domain.CanConnect(state) {
+				allowed = true
+				userInbounds := domain.DecodeInbounds(u.Inbounds)
+				if len(userInbounds) > 0 {
+					if !slices.Contains(userInbounds, ftInboundID) && !slices.Contains(userInbounds, int64(990001)) {
+						allowed = false
+					}
+				}
+			}
+		}
+
 		nodePeers[i] = nodeapi.FreeTurnPeer{
 			SlotName:  p.SlotName,
 			ClientID:  p.ClientID,
 			PublicKey: p.WgPubkey,
 			AllowedIP: p.WgIp,
-			Allowed:   p.Allowed,
+			Allowed:   allowed,
 		}
 	}
 	return &nodeapi.FreeTurnConfig{

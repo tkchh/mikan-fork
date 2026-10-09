@@ -283,6 +283,11 @@ function Apps({ block: b, config, subURL, brand, happ, freeturn, tgMode, platfor
           </div>
         ))}
       </div>
+      {tab === "android" && freeturn ? (
+        <p className="mt-3 text-xs text-[var(--ink-500)] leading-relaxed">
+          {t("sub.freeturnWarning")}
+        </p>
+      ) : null}
     </section>
   );
 }

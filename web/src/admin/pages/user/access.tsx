@@ -215,3 +215,72 @@ export function NoteSection({ u }: { u: User }) {
     </Section>
   );
 }
+
+export function FreeTurnSection({ u }: { u: User }) {
+  const toast = useToast();
+  const copyText = useCopy();
+  const [confirmReset, setConfirmReset] = useState(false);
+  const resetMutation = useUserMutation((id: number) =>
+    unwrap(api.POST("/api/v1/users/{id}/freeturn/reset" as any, { params: { path: { id } } }))
+  );
+
+  const ft = u.freeturn;
+  if (!ft) return null;
+
+  return (
+    <Section title={t("userDrawer.freeturnTitle")}>
+      <div className="space-y-3">
+        <div>
+          <div className="text-xs text-[var(--ink-500)] mb-1">WireGuard IP</div>
+          <div className="link-field">
+            <span className="mono">{ft.wg_ip}</span>
+            <button type="button" className="icon-btn" onClick={() => copyText(ft.wg_ip, t("common.linkCopied"))} aria-label={t("common.copyLink")}>
+              <Copy size={16} />
+            </button>
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-[var(--ink-500)] mb-1">Client ID (free-turn-proxy)</div>
+          <div className="link-field">
+            <span className="mono">{ft.client_id}</span>
+            <button type="button" className="icon-btn" onClick={() => copyText(ft.client_id, t("common.linkCopied"))} aria-label={t("common.copyLink")}>
+              <Copy size={16} />
+            </button>
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-[var(--ink-500)] mb-1">WireGuard Public Key</div>
+          <div className="link-field">
+            <span className="mono">{ft.wg_pubkey}</span>
+            <button type="button" className="icon-btn" onClick={() => copyText(ft.wg_pubkey, t("common.linkCopied"))} aria-label={t("common.copyLink")}>
+              <Copy size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="pt-1">
+          <Button size="sm" variant="danger" onClick={() => setConfirmReset(true)}>
+            <RefreshCw size={16} aria-hidden /> {t("userDrawer.freeturnReset")}
+          </Button>
+        </div>
+      </div>
+      <Confirm
+        open={confirmReset}
+        onOpenChange={setConfirmReset}
+        title={t("userDrawer.freeturnResetConfirm")}
+        text={t("userDrawer.freeturnResetText")}
+        confirm={t("userDrawer.freeturnReset")}
+        danger
+        loading={resetMutation.isPending}
+        onConfirm={() =>
+          resetMutation.mutate(u.id, {
+            onSuccess: () => {
+              setConfirmReset(false);
+              toast.ok(t("userDrawer.freeturnResetDone"));
+            },
+            onError: (e) => toast.error(errorText(e)),
+          })
+        }
+      />
+    </Section>
+  );
+}

@@ -13,7 +13,7 @@ import { ago, dateShort } from "../../lib/format";
 import { GrantsSection } from "./user/grants";
 import { PoolsSection, TariffSection, TrafficSection } from "./user/traffic";
 import { ExpirySection } from "./user/expiry";
-import { NoteSection, ProtocolsSection, SubscriptionSection, TelegramSection } from "./user/access";
+import { FreeTurnSection, NoteSection, ProtocolsSection, SubscriptionSection, TelegramSection } from "./user/access";
 import { DevicesSection } from "./user/devices";
 import { OrganiseSection } from "./user/organise";
 import { TorrentSection } from "./user/torrent";
@@ -119,6 +119,7 @@ function UserBody({ u, onDeleted }: { u: User; onDeleted: () => void }) {
         <PoolsSection u={u} />
         <GrantsSection u={u} />
         <ProtocolsSection u={u} />
+        <FreeTurnSection u={u} />
         <TorrentSection u={u} />
         <TelegramSection u={u} />
         <OrganiseSection u={u} />

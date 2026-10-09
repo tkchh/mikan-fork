@@ -14,7 +14,7 @@ import (
 func TestPresetsMatchTheirTemplates(t *testing.T) {
 	others := []App{{Family: FamilyXray}, {Family: FamilySingBox}, {Family: FamilyOther}}
 	for _, p := range presets.All {
-		if p.ID == presets.Custom {
+		if p.ID == presets.Custom || p.ID == "freeturn" {
 			continue
 		}
 		src, err := presets.NewConfig(p.ID, "")

@@ -39,6 +39,15 @@ func inboundCmd(ctx context.Context, st *store.Store, args []string, stdout, std
 			}
 			fmt.Fprintf(tw, "%d\t%s\t%s\t%s/%s\t%s\n", in.NodeID, in.Name, in.Preset, in.Port, domain.InboundNetwork(in), on)
 		}
+		if allFT, err := st.Q.ListAllNodeFreeTurn(ctx); err == nil {
+			for _, ft := range allFT {
+				on := "yes"
+				if ft.Enabled == 0 {
+					on = "no"
+				}
+				fmt.Fprintf(tw, "%d\tfreeturn\tfreeturn\t%d/udp\t%s\n", ft.NodeID, ft.ListenPort, on)
+			}
+		}
 		return tw.Flush()
 	case "add":
 		if len(args) < 2 || strings.HasPrefix(args[1], "-") {

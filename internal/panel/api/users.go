@@ -16,6 +16,7 @@ import (
 	"mikan/internal/panel/domain"
 	"mikan/internal/panel/store/db"
 	"mikan/internal/panel/torrent"
+	"mikan/internal/panel/subs"
 )
 
 // TelegramLink is the Telegram account that manages a subscription in the bot.
@@ -25,7 +26,14 @@ type TelegramLink struct {
 	Name     string `json:"name"`
 }
 
+type FreeTurnUserInfo struct {
+	ClientID string `json:"client_id"`
+	WgIP     string `json:"wg_ip"`
+	WgPubKey string `json:"wg_pubkey"`
+}
+
 type UserView struct {
+	FreeTurn      *FreeTurnUserInfo `json:"freeturn,omitempty" doc:"Данные FreeTurn (WireGuard IP, Client ID, публичный ключ)"`
 	Telegram      *TelegramLink `json:"telegram,omitempty" doc:"Только в карточке пользователя"`
 	Legacy        *LegacyLinks  `json:"legacy,omitempty" doc:"Старые ссылки подписки из панели, откуда импортирован пользователь. Только в карточке и не для ключа только на чтение: это тоже ссылка"`
 	ID            int64         `json:"id"`
@@ -318,6 +326,7 @@ func (h *handlers) registerUsers() {
 	huma.Register(h.api, huma.Operation{OperationID: "user-devices", Method: http.MethodGet, Path: "/api/v1/users/{id}/devices", Summary: "Адреса, с которых заходил пользователь", Tags: tags}, h.userDevices)
 	huma.Register(h.api, huma.Operation{OperationID: "user-bound-devices", Method: http.MethodGet, Path: "/api/v1/users/{id}/bound-devices", Summary: "Устройства, привязанные к подписке", Tags: tags}, h.boundDevices)
 	huma.Register(h.api, huma.Operation{OperationID: "unbind-device", Method: http.MethodDelete, Path: "/api/v1/users/{id}/bound-devices/{device}", Summary: "Отвязать устройство: его ключи сгорают", Tags: tags, DefaultStatus: http.StatusNoContent}, h.unbindDevice)
+	huma.Register(h.api, huma.Operation{OperationID: "reset-user-freeturn", Method: http.MethodPost, Path: "/api/v1/users/{id}/freeturn/reset", Summary: "Сбросить и перегенерировать ключи FreeTurn пользователя", Tags: tags}, h.resetUserFreeTurn)
 }
 
 func mapDomainErr(err error) error {
@@ -522,7 +531,15 @@ func (h *handlers) userResult(ctx context.Context, u db.User, err error) (*userO
 	if err != nil {
 		return nil, err
 	}
-	return &userOutput{Body: h.viewUser(u, slots, bound, grants, h.userEnv(ctx))}, nil
+	res := &userOutput{Body: h.viewUser(u, slots, bound, grants, h.userEnv(ctx))}
+	if fts, err := h.d.Store.Q.GetUserFreeTurn(ctx, u.ID); err == nil && len(fts) > 0 {
+		res.Body.FreeTurn = &FreeTurnUserInfo{
+			ClientID: fts[0].ClientID,
+			WgIP:     fts[0].WgIp,
+			WgPubKey: fts[0].WgPubkey,
+		}
+	}
+	return res, nil
 }
 
 func (h *handlers) createUser(ctx context.Context, in *createUserInput) (*userOutput, error) {
@@ -740,4 +757,72 @@ func (h *handlers) userDevices(ctx context.Context, in *userIDInput) (*devicesOu
 		out.Body = append(out.Body, DeviceView{IP: d.Ip, FirstSeen: time.Unix(d.FirstSeen, 0).UTC(), LastSeen: time.Unix(d.LastSeen, 0).UTC(), Online: slices.Contains(live, d.Ip)})
 	}
 	return out, nil
+}
+
+type resetFreeTurnOutput struct {
+	Body FreeTurnUserInfo
+}
+
+func (h *handlers) resetUserFreeTurn(ctx context.Context, in *userIDInput) (*resetFreeTurnOutput, error) {
+	u, err := h.d.Users.Get(ctx, in.ID)
+	if err != nil {
+		return nil, mapDomainErr(err)
+	}
+
+	if err := h.d.Store.Q.DeleteUserFreeTurnOfUser(ctx, u.ID); err != nil {
+		return nil, huma.Error500InternalServerError("delete old freeturn", err)
+	}
+
+	cid, err := subs.GenerateClientID()
+	if err != nil {
+		return nil, huma.Error500InternalServerError("generate client id", err)
+	}
+	privKey, pubKey, err := subs.GenerateWireGuardKeypair()
+	if err != nil {
+		return nil, huma.Error500InternalServerError("generate keypair", err)
+	}
+	usedIPs, err := h.d.Store.Q.ListUsedFreeTurnIPs(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("list used ips", err)
+	}
+	netCIDR := "10.13.13.0/24"
+	if nodeFTs, err := h.d.Store.Q.ListNodeFreeTurn(ctx); err == nil && len(nodeFTs) > 0 && nodeFTs[0].WgNetwork != "" {
+		netCIDR = nodeFTs[0].WgNetwork
+	}
+	wgIP, err := subs.NextFreeIP(usedIPs, netCIDR)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("next free ip", err)
+	}
+
+	slotID := int64(1)
+	if u.SlotID.Valid {
+		slotID = u.SlotID.Int64
+	}
+	newFT, err := h.d.Store.Q.CreateUserFreeTurn(ctx, db.CreateUserFreeTurnParams{
+		UserID:     u.ID,
+		SlotID:     slotID,
+		ClientID:   cid,
+		WgPubkey:   pubKey,
+		WgPrivkey:  privKey,
+		WgIp:       wgIP,
+		DeviceName: "FreeTurn Client",
+		CreatedAt:  h.d.Now().Unix(),
+	})
+	if err != nil {
+		return nil, huma.Error500InternalServerError("create user freeturn", err)
+	}
+
+	if h.d.Changes != nil {
+		h.d.Changes.SlotsChanged()
+	}
+
+	h.audit(ctx, sessionOf(ctx).AdminID, "user.freeturn_reset", "user", strconv.FormatInt(u.ID, 10), nil)
+
+	return &resetFreeTurnOutput{
+		Body: FreeTurnUserInfo{
+			ClientID: newFT.ClientID,
+			WgIP:     newFT.WgIp,
+			WgPubKey: newFT.WgPubkey,
+		},
+	}, nil
 }

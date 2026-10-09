@@ -189,6 +189,18 @@ func (h *handlers) renderMetrics(ctx context.Context, now time.Time) ([]byte, er
 				m.sample("mikan_inbound_up", b2f(l.OK), "node_id", n.id, "node", n.name, "inbound_id", ids[l.Name], "inbound", l.Name)
 			}
 		}
+		if allFT, err := h.d.Store.Q.ListAllNodeFreeTurn(ctx); err == nil {
+			for _, ft := range allFT {
+				nodeIDStr := strconv.FormatInt(ft.NodeID, 10)
+				for _, n := range live {
+					if n.id == nodeIDStr {
+						inboundIDStr := strconv.FormatInt(freeTurnInboundBaseID+ft.NodeID, 10)
+						m.sample("mikan_inbound_up", b2f(ft.Enabled != 0), "node_id", n.id, "node", n.name, "inbound_id", inboundIDStr, "inbound", "freeturn")
+						break
+					}
+				}
+			}
+		}
 	}
 
 	// Retries are harmless one by one; a steady climb means writers keep colliding.

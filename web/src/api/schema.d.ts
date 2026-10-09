@@ -4208,6 +4208,11 @@ export interface components {
             folder_id: number | null;
             /** @description Скрыт из списка пользователей. Только прячет строку: подписка, оплата и ноды работают как у всех, счётчики обзора не меняются */
             hidden: boolean;
+            freeturn?: {
+                client_id: string;
+                wg_ip: string;
+                wg_pubkey: string;
+            };
             /** Format: int64 */
             id: number;
             /** @description Разрешённые подключения; пусто — все */

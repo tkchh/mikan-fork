@@ -50,7 +50,7 @@ func TestBuildFreeTurnLinkAndSub(t *testing.T) {
 	}
 
 	wgConf, ok := wire["wg"].(string)
-	if !ok || !strings.Contains(wgConf, "[Interface]") || !strings.Contains(wgConf, "Endpoint = 127.0.0.1:9000") {
+	if !ok || !strings.Contains(wgConf, "[Interface]") || !strings.Contains(wgConf, "MTU = 1280") || !strings.Contains(wgConf, "Endpoint = 127.0.0.1:9000") {
 		t.Errorf("wire[wg] does not contain expected WireGuard configuration: %v", wire["wg"])
 	}
 

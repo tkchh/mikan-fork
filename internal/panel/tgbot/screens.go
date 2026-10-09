@@ -12,6 +12,8 @@ import (
 	"mikan/internal/panel/domain"
 	"mikan/internal/panel/settings"
 	"mikan/internal/panel/store/db"
+	"mikan/internal/panel/subs"
+	"net"
 )
 
 // Callback data: m main, s subscription, d devices, dc:<id> confirm unbind, du:<id>
@@ -89,7 +91,10 @@ func (b *Bot) screen(ctx context.Context, cfg Config, chat int64, data, notice s
 		if btn, ok := b.pageButton(ctx, cfg, w, w.openPage); ok {
 			rows = append(rows, []Button{btn})
 		}
+		rows = append(rows, []Button{{Text: w.freeturnTitle, CallbackData: "ft"}})
 		return withNotice(text), &Keyboard{append(rows, back)}
+	case "ft":
+		return b.freeTurnScreen(ctx, cfg, w, u, notice)
 	case "r":
 		if offers, _ := b.offers(ctx); len(offers) > 0 {
 			text, kb := b.shopList(ctx, w, fmt.Sprintf(w.renewTitle, u.Name), "t", notice, nil)
@@ -274,6 +279,38 @@ func (b *Bot) act(ctx context.Context, chat int64, data string) (screen, notice 
 	cmd, arg, _ := strings.Cut(data, ":")
 	id, _ := strconv.ParseInt(arg, 10, 64)
 	switch cmd {
+	case "ftc":
+		w := wordsFor(b.Config(ctx).Lang)
+		_, u, ok := b.subs(ctx, chat)
+		if !ok {
+			return "m", ""
+		}
+		nodeFTs, err := b.d.Store.Q.ListNodeFreeTurn(ctx)
+		if err != nil || len(nodeFTs) == 0 {
+			msg := "FreeTurn недоступен"
+			if b.Config(ctx).Lang == "en" {
+				msg = "FreeTurn is unavailable"
+			}
+			return "ft", msg
+		}
+		_, conf, err := b.userFreeTurnLinkAndConf(ctx, u, nodeFTs)
+		if err != nil || conf == "" {
+			msg := "Не удалось сформировать .conf файл"
+			if b.Config(ctx).Lang == "en" {
+				msg = "Failed to generate .conf file"
+			}
+			return "ft", msg
+		}
+		caption := fmt.Sprintf(w.freeturnDocCaption, u.Name)
+		fileName := fmt.Sprintf("freeturn-%s.conf", u.Name)
+		if out := b.out.Load(); out != nil {
+			out.Reply(chat, "doc:"+fileName, 1, func(ctx context.Context, c *Client) error {
+				reader := strings.NewReader(conf)
+				_, err := c.SendDocument(ctx, chat, fileName, reader, int64(len(conf)), caption)
+				return err
+			})
+		}
+		return "ft", w.freeturnDocSent
 	case "du":
 		w := wordsFor(b.Config(ctx).Lang)
 		_, u, ok := b.subs(ctx, chat)
@@ -434,4 +471,139 @@ func (b *Bot) poolLines(ctx context.Context, w *words, userID int64) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+func (b *Bot) freeTurnScreen(ctx context.Context, cfg Config, w *words, u db.User, notice string) (string, *Keyboard) {
+	back := []Button{{Text: w.back, CallbackData: "c"}}
+	nodeFTs, err := b.d.Store.Q.ListNodeFreeTurn(ctx)
+	if err != nil || len(nodeFTs) == 0 {
+		msg := "FreeTurn временно недоступен или ещё не настроен на сервере."
+		if cfg.Lang == "en" {
+			msg = "FreeTurn is temporarily unavailable or not yet configured on the server."
+		}
+		return msg, &Keyboard{[][]Button{back}}
+	}
+
+	directLink, _, err := b.userFreeTurnLinkAndConf(ctx, u, nodeFTs)
+	if err != nil {
+		b.d.Log.Warn("telegram: get freeturn config", "user", u.ID, "err", err)
+		msg := "Не удалось получить конфигурацию FreeTurn. Попробуйте позже."
+		if cfg.Lang == "en" {
+			msg = "Failed to load FreeTurn configuration. Try again later."
+		}
+		return msg, &Keyboard{[][]Button{back}}
+	}
+
+	subURL := b.subURL(ctx, u)
+	ftSubURL := ""
+	if subURL != "" {
+		ftSubURL = subURL + "?format=freeturn"
+	}
+
+	text := fmt.Sprintf(w.freeturnConnect, html.EscapeString(ftSubURL), html.EscapeString(directLink))
+	if notice != "" {
+		text = html.EscapeString(notice) + "\n\n" + text
+	}
+
+	rows := [][]Button{
+		{{Text: "📥 Скачать WireGuard .conf", CallbackData: "ftc"}},
+		{{Text: "📱 Скачать FreeTurn APK", URL: "https://github.com/hackdiaz-dev/turn-proxy-android/releases"}},
+		back,
+	}
+	if cfg.Lang == "en" {
+		rows[0] = []Button{{Text: "📥 Download WireGuard .conf", CallbackData: "ftc"}}
+		rows[1] = []Button{{Text: "📱 Download FreeTurn APK", URL: "https://github.com/hackdiaz-dev/turn-proxy-android/releases"}}
+	}
+	return text, &Keyboard{rows}
+}
+
+func (b *Bot) userFreeTurnLinkAndConf(ctx context.Context, u db.User, nodeFTs []db.NodeFreeturn) (string, string, error) {
+	if len(nodeFTs) == 0 {
+		var err error
+		nodeFTs, err = b.d.Store.Q.ListNodeFreeTurn(ctx)
+		if err != nil || len(nodeFTs) == 0 {
+			return "", "", errors.New("no freeturn nodes")
+		}
+	}
+
+	nft := nodeFTs[0]
+	n, err := b.d.Store.Q.GetNode(ctx, nft.NodeID)
+	if err != nil {
+		return "", "", err
+	}
+	host := n.PublicHost
+	if host == "" {
+		host = n.Address
+	}
+	peer := net.JoinHostPort(host, strconv.FormatInt(nft.ListenPort, 10))
+	node := subs.FreeTurnNode{
+		Name:       n.Name,
+		Peer:       peer,
+		ObfProfile: nft.ObfProfile,
+		ObfKey:     nft.ObfKey,
+		WgPubKey:   nft.WgPubkey,
+	}
+
+	fts, err := b.d.Store.Q.GetUserFreeTurn(ctx, u.ID)
+	if err != nil {
+		return "", "", err
+	}
+
+	var client subs.FreeTurnClient
+	if len(fts) > 0 {
+		client = subs.FreeTurnClient{
+			ClientID:   fts[0].ClientID,
+			WgPrivKey:  fts[0].WgPrivkey,
+			WgIP:       fts[0].WgIp,
+			ClientName: u.Name,
+		}
+	} else {
+		cid, err := subs.GenerateClientID()
+		if err != nil {
+			return "", "", err
+		}
+		privKey, pubKey, err := subs.GenerateWireGuardKeypair()
+		if err != nil {
+			return "", "", err
+		}
+		usedIPs, err := b.d.Store.Q.ListUsedFreeTurnIPs(ctx)
+		if err != nil {
+			return "", "", err
+		}
+		netCIDR := nft.WgNetwork
+		if netCIDR == "" {
+			netCIDR = "10.13.13.0/24"
+		}
+		wgIP, err := subs.NextFreeIP(usedIPs, netCIDR)
+		if err != nil {
+			return "", "", err
+		}
+		slotID := int64(1)
+		if u.SlotID.Valid {
+			slotID = u.SlotID.Int64
+		}
+		newFT, err := b.d.Store.Q.CreateUserFreeTurn(ctx, db.CreateUserFreeTurnParams{
+			UserID:     u.ID,
+			SlotID:     slotID,
+			ClientID:   cid,
+			WgPubkey:   pubKey,
+			WgPrivkey:  privKey,
+			WgIp:       wgIP,
+			DeviceName: "FreeTurn Client",
+			CreatedAt:  b.d.Now().Unix(),
+		})
+		if err != nil {
+			return "", "", err
+		}
+		client = subs.FreeTurnClient{
+			ClientID:   newFT.ClientID,
+			WgPrivKey:  newFT.WgPrivkey,
+			WgIP:       newFT.WgIp,
+			ClientName: u.Name,
+		}
+	}
+
+	link := subs.BuildFreeTurnLink(node, client)
+	conf := subs.BuildFreeTurnWireGuardConfig(node, client)
+	return link, conf, nil
 }

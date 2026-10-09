@@ -181,6 +181,13 @@ func (h *handlers) viewNode(ctx context.Context, n db.Node, inbounds []db.Inboun
 			v.ListenersOK++
 		}
 	}
+		if nft, err := h.d.Store.Q.GetNodeFreeTurn(ctx, n.ID); err == nil {
+		v.Inbounds++
+		v.Listeners++
+		if nft.Enabled != 0 {
+			v.ListenersOK++
+		}
+	}
 	h.nodeUpdateView(ctx, &v, nodeupdate.Reported(hv.Health.Update))
 	return v
 }

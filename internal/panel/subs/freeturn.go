@@ -34,6 +34,7 @@ func BuildFreeTurnWireGuardConfig(node FreeTurnNode, client FreeTurnClient) stri
 	sb.WriteString("PrivateKey = " + client.WgPrivKey + "\n")
 	sb.WriteString("Address = " + client.WgIP + "\n")
 	sb.WriteString("DNS = 1.1.1.1, 77.88.8.8\n")
+	sb.WriteString("MTU = 1280\n")
 	sb.WriteString("\n[Peer]\n")
 	sb.WriteString("PublicKey = " + node.WgPubKey + "\n")
 	sb.WriteString("AllowedIPs = 0.0.0.0/0, ::/0\n")
