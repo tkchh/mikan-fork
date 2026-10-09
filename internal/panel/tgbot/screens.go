@@ -526,14 +526,29 @@ func (b *Bot) userFreeTurnLinkAndConf(ctx context.Context, u db.User, nodeFTs []
 		}
 	}
 
-	nft := nodeFTs[0]
-	n, err := b.d.Store.Q.GetNode(ctx, nft.NodeID)
-	if err != nil {
-		return "", "", err
+	var nft db.NodeFreeturn
+	var n db.Node
+	found := false
+	for _, candidate := range nodeFTs {
+		node, err := b.d.Store.Q.GetNode(ctx, candidate.NodeID)
+		if err == nil && node.Enabled != 0 {
+			nft = candidate
+			n = node
+			found = true
+			break
+		}
 	}
+	if !found {
+		return "", "", errors.New("no enabled freeturn nodes")
+	}
+
 	host := n.PublicHost
 	if host == "" {
-		host = n.Address
+		if h, _, err := net.SplitHostPort(n.Address); err == nil {
+			host = h
+		} else {
+			host = n.Address
+		}
 	}
 	peer := net.JoinHostPort(host, strconv.FormatInt(nft.ListenPort, 10))
 	node := subs.FreeTurnNode{
@@ -578,9 +593,14 @@ func (b *Bot) userFreeTurnLinkAndConf(ctx context.Context, u db.User, nodeFTs []
 		if err != nil {
 			return "", "", err
 		}
-		slotID := int64(1)
+		slotID := int64(0)
 		if u.SlotID.Valid {
 			slotID = u.SlotID.Int64
+		} else if slots, err := b.d.Store.Q.ListSlots(ctx); err == nil && len(slots) > 0 {
+			slotID = slots[0].ID
+		}
+		if slotID == 0 {
+			slotID = 1
 		}
 		newFT, err := b.d.Store.Q.CreateUserFreeTurn(ctx, db.CreateUserFreeTurnParams{
 			UserID:     u.ID,

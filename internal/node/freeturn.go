@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -91,6 +92,8 @@ func (m *FreeTurnManager) Apply(cfg *nodeapi.FreeTurnConfig, reg *Registry) erro
 
 	m.config = cfg
 	if cfg == nil || !cfg.Enabled {
+		_ = m.syncClientsFile(nil)
+		m.syncWgPeers(nil)
 		return nil
 	}
 
@@ -148,24 +151,48 @@ func (m *FreeTurnManager) syncWgPeers(peers []nodeapi.FreeTurnPeer) {
 	var peerConfigs []wgtypes.PeerConfig
 	m.slotByPub = make(map[string]string)
 
+	desired := make(map[wgtypes.Key]nodeapi.FreeTurnPeer)
 	for _, p := range peers {
 		key, err := wgtypes.ParseKey(p.PublicKey)
 		if err != nil {
 			continue
 		}
-		keyHex := key.String()
-		m.slotByPub[keyHex] = p.SlotName
+		desired[key] = p
+		if p.Allowed {
+			m.slotByPub[key.String()] = p.SlotName
+		}
+	}
 
+	removedKeys := make(map[wgtypes.Key]bool)
+	if dev, err := m.wgClient.Device(m.ifaceName); err == nil {
+		for _, cur := range dev.Peers {
+			p, ok := desired[cur.PublicKey]
+			if !ok || !p.Allowed {
+				peerConfigs = append(peerConfigs, wgtypes.PeerConfig{
+					PublicKey: cur.PublicKey,
+					Remove:    true,
+				})
+				removedKeys[cur.PublicKey] = true
+			}
+		}
+	}
+
+	for key, p := range desired {
 		if !p.Allowed {
-			// Remove peer immediately if quota is exhausted or user is disabled
-			peerConfigs = append(peerConfigs, wgtypes.PeerConfig{
-				PublicKey: key,
-				Remove:    true,
-			})
+			if !removedKeys[key] {
+				peerConfigs = append(peerConfigs, wgtypes.PeerConfig{
+					PublicKey: key,
+					Remove:    true,
+				})
+			}
 			continue
 		}
 
-		ipPrefix, err := netip.ParsePrefix(p.AllowedIP)
+		allowedIP := p.AllowedIP
+		if !strings.Contains(allowedIP, "/") {
+			allowedIP += "/32"
+		}
+		ipPrefix, err := netip.ParsePrefix(allowedIP)
 		var ipNet net.IPNet
 		if err == nil {
 			ipNet = net.IPNet{

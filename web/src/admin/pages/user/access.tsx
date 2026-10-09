@@ -225,7 +225,32 @@ export function FreeTurnSection({ u }: { u: User }) {
   );
 
   const ft = u.freeturn;
-  if (!ft) return null;
+  if (!ft) {
+    return (
+      <Section title={t("userDrawer.freeturnTitle")}>
+        <div className="space-y-3">
+          <p className="text-xs text-[var(--ink-500)] leading-relaxed">
+            {t("userDrawer.freeturnNotGenerated")}
+          </p>
+          <div className="pt-1">
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={resetMutation.isPending}
+              onClick={() =>
+                resetMutation.mutate(u.id, {
+                  onSuccess: () => toast.ok(t("userDrawer.freeturnResetDone")),
+                  onError: (e) => toast.error(errorText(e)),
+                })
+              }
+            >
+              <RefreshCw size={16} aria-hidden /> {t("userDrawer.freeturnGenerate")}
+            </Button>
+          </div>
+        </div>
+      </Section>
+    );
+  }
 
   return (
     <Section title={t("userDrawer.freeturnTitle")}>
@@ -257,6 +282,9 @@ export function FreeTurnSection({ u }: { u: User }) {
             </button>
           </div>
         </div>
+        <p className="text-xs text-[var(--ink-500)] leading-relaxed pt-1">
+          {t("userDrawer.freeturnDeviceLimitHint")}
+        </p>
         <div className="pt-1">
           <Button size="sm" variant="danger" onClick={() => setConfirmReset(true)}>
             <RefreshCw size={16} aria-hidden /> {t("userDrawer.freeturnReset")}

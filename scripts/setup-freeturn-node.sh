@@ -66,6 +66,26 @@ fi
 chown -R 65532:65532 "/opt/free-turn-proxy" 2>/dev/null || true
 chmod -R 775 "/opt/free-turn-proxy"
 
+if command -v docker >/dev/null 2>&1; then
+  echo "--> Setting up free-turn-proxy Docker container..."
+  docker pull ghcr.io/hackdiaz-dev/free-turn-proxy:latest || true
+  docker stop free-turn-proxy 2>/dev/null || true
+  docker rm free-turn-proxy 2>/dev/null || true
+  docker run -d \
+    --name free-turn-proxy \
+    --restart unless-stopped \
+    --network host \
+    -v "${AUTH_DIR}:${AUTH_DIR}:ro" \
+    ghcr.io/hackdiaz-dev/free-turn-proxy:latest \
+    -listen "0.0.0.0:${FREETURN_PORT}" \
+    -connect "127.0.0.1:${WG_PORT}" \
+    -mode udp \
+    -clients-file "${AUTH_DIR}/clients.json" \
+    -obf-profile "${OBF_PROFILE}" \
+    -obf-key "${OBF_KEY}"
+  echo "free-turn-proxy container is up and running."
+fi
+
 echo "=== FreeTurn Node Sidecar Ready ==="
 echo "WireGuard Public Key: $WG_PUBKEY"
 echo "WireGuard Port: $WG_PORT"

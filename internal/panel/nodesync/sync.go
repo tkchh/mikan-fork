@@ -805,6 +805,20 @@ func (s *Syncer) warp(ctx context.Context, n db.Node, inbounds []db.Inbound) (*n
 	return out, nil
 }
 
+// FreeTurnPeerAllowed determines whether a FreeTurn peer is allowed to connect based on
+// user status, expiration, traffic quota, and selective inbound permissions.
+func FreeTurnPeerAllowed(u db.User, grants int64, now time.Time, ftInboundID int64) bool {
+	state := domain.State(u, grants, now)
+	if !domain.CanConnect(state) {
+		return false
+	}
+	userInbounds := domain.DecodeInbounds(u.Inbounds)
+	if len(userInbounds) > 0 && !slices.Contains(userInbounds, ftInboundID) {
+		return false
+	}
+	return true
+}
+
 // freeturn is the node's FreeTurn (vk-turn-proxy) sidecar and WireGuard configuration, nil when disabled.
 func (s *Syncer) freeturn(ctx context.Context, n db.Node, snap *snapshot) (*nodeapi.FreeTurnConfig, error) {
 	ft, err := s.m.st.Q.GetNodeFreeTurn(ctx, n.ID)
@@ -830,17 +844,7 @@ func (s *Syncer) freeturn(ctx context.Context, n db.Node, snap *snapshot) (*node
 	for i, p := range peers {
 		allowed := false
 		if u, ok := userMap[p.UserID]; ok {
-			userGrants := grants.Main(u.ID)
-			state := domain.State(u, userGrants, now)
-			if domain.CanConnect(state) {
-				allowed = true
-				userInbounds := domain.DecodeInbounds(u.Inbounds)
-				if len(userInbounds) > 0 {
-					if !slices.Contains(userInbounds, ftInboundID) && !slices.Contains(userInbounds, int64(990001)) {
-						allowed = false
-					}
-				}
-			}
+			allowed = FreeTurnPeerAllowed(u, grants.Main(u.ID), now, ftInboundID)
 		}
 
 		nodePeers[i] = nodeapi.FreeTurnPeer{

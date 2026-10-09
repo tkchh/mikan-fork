@@ -802,7 +802,10 @@
     "freeturnReset": "Reset FreeTurn keys",
     "freeturnResetConfirm": "Reset FreeTurn keys?",
     "freeturnResetText": "New WireGuard keys and Client ID will be generated for FreeTurn. The user will need to refresh their configuration.",
-    "freeturnResetDone": "FreeTurn keys regenerated"
+    "freeturnResetDone": "FreeTurn keys regenerated",
+    "freeturnNotGenerated": "FreeTurn credentials have not been generated for this user yet.",
+    "freeturnGenerate": "Generate FreeTurn keys",
+    "freeturnDeviceLimitHint": "⚠️ One FreeTurn profile is designed for 1 active WireGuard device at a time."
   },
   "tariffs": {
     "subtitle": "Templates for granting access in one click. Changing a plan does not touch subscriptions already issued.",

@@ -802,7 +802,10 @@
     "freeturnReset": "Сбросить ключи FreeTurn",
     "freeturnResetConfirm": "Сбросить ключи FreeTurn?",
     "freeturnResetText": "Будут сгенерированы новые ключи WireGuard и Client ID для FreeTurn. Пользователю потребуется обновить конфигурацию.",
-    "freeturnResetDone": "Ключи FreeTurn перегенерированы"
+    "freeturnResetDone": "Ключи FreeTurn перегенерированы",
+    "freeturnNotGenerated": "Ключи FreeTurn для этого пользователя ещё не сгенерированы.",
+    "freeturnGenerate": "Сгенерировать ключи FreeTurn",
+    "freeturnDeviceLimitHint": "⚠️ Профиль FreeTurn рассчитан на одно активное устройство WireGuard одновременно."
   },
   "tariffs": {
     "subtitle": "Шаблоны для выдачи доступа в один клик. Изменение тарифа не трогает уже выданные подписки.",

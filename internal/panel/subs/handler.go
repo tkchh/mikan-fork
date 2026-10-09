@@ -832,7 +832,11 @@ func (h *Handler) freeTurnProfile(ctx context.Context, u db.User, slot db.Slot, 
 		}
 		host := n.PublicHost
 		if host == "" {
-			host = n.Address
+			if h, _, err := net.SplitHostPort(n.Address); err == nil {
+				host = h
+			} else {
+				host = n.Address
+			}
 		}
 		peer := net.JoinHostPort(host, strconv.FormatInt(nft.ListenPort, 10))
 		nodes = append(nodes, FreeTurnNode{
@@ -884,6 +888,8 @@ func (h *Handler) freeTurnProfile(ctx context.Context, u db.User, slot db.Slot, 
 		if slotID == 0 {
 			if u.SlotID.Valid {
 				slotID = u.SlotID.Int64
+			} else if slots, err := h.st.Q.ListSlots(ctx); err == nil && len(slots) > 0 {
+				slotID = slots[0].ID
 			} else {
 				slotID = 1
 			}

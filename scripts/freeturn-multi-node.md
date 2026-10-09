@@ -26,6 +26,23 @@ Environment variables for custom settings:
 
 ## Docker Compose Configuration on Remote Node
 
+The automated setup script starts `free-turn-proxy` in Docker. If deploying manually or via compose:
+
+```bash
+docker run -d \
+  --name free-turn-proxy \
+  --restart unless-stopped \
+  --network host \
+  -v /opt/free-turn-proxy/auth:/opt/free-turn-proxy/auth:ro \
+  ghcr.io/hackdiaz-dev/free-turn-proxy:latest \
+  -listen 0.0.0.0:56392 \
+  -connect 127.0.0.1:51820 \
+  -mode udp \
+  -clients-file /opt/free-turn-proxy/auth/clients.json \
+  -obf-profile rtpopus3 \
+  -obf-key <OBF_KEY>
+```
+
 Ensure `mikan-node` in `compose.yaml` has `cap_add: [NET_ADMIN]` and mounts the auth directory:
 
 ```yaml

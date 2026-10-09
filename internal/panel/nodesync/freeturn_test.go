@@ -2,7 +2,6 @@ package nodesync
 
 import (
 	"database/sql"
-	"slices"
 	"testing"
 	"time"
 
@@ -83,22 +82,31 @@ func TestFreeTurnPeerAllowedLogic(t *testing.T) {
 			ftInboundID: 990001,
 			wantAllowed: false,
 		},
+		{
+			name: "multi-node: user allowed on node 1 but not node 2",
+			user: db.User{
+				ID:       7,
+				Status:   "active",
+				Inbounds: sql.NullString{String: "[990001]", Valid: true},
+			},
+			ftInboundID: 990002,
+			wantAllowed: false,
+		},
+		{
+			name: "multi-node: user allowed on node 2",
+			user: db.User{
+				ID:       8,
+				Status:   "active",
+				Inbounds: sql.NullString{String: "[990002]", Valid: true},
+			},
+			ftInboundID: 990002,
+			wantAllowed: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			userGrants := grants.Main(tt.user.ID)
-			state := domain.State(tt.user, userGrants, now)
-			allowed := false
-			if domain.CanConnect(state) {
-				allowed = true
-				userInbounds := domain.DecodeInbounds(tt.user.Inbounds)
-				if len(userInbounds) > 0 {
-					if !slices.Contains(userInbounds, tt.ftInboundID) && !slices.Contains(userInbounds, int64(990001)) {
-						allowed = false
-					}
-				}
-			}
+			allowed := FreeTurnPeerAllowed(tt.user, grants.Main(tt.user.ID), now, tt.ftInboundID)
 			if allowed != tt.wantAllowed {
 				t.Errorf("got allowed=%v, want %v", allowed, tt.wantAllowed)
 			}
