@@ -2,9 +2,12 @@ package tgbot
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
+	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -13,7 +16,6 @@ import (
 	"mikan/internal/panel/settings"
 	"mikan/internal/panel/store/db"
 	"mikan/internal/panel/subs"
-	"net"
 )
 
 // Callback data: m main, s subscription, d devices, dc:<id> confirm unbind, du:<id>
@@ -542,17 +544,57 @@ func (b *Bot) userFreeTurnLinkAndConf(ctx context.Context, u db.User, nodeFTs []
 		return "", "", errors.New("no enabled freeturn nodes")
 	}
 
-	host := n.PublicHost
+	host := n.Domain
 	if host == "" {
+		host = n.PublicHost
+	}
+	if host == "" && n.Address != "" {
 		if h, _, err := net.SplitHostPort(n.Address); err == nil {
 			host = h
 		} else {
 			host = n.Address
 		}
 	}
+	if host == "" {
+		if dom, _ := b.d.Settings.String(ctx, settings.KeyDomain); dom != "" {
+			host = dom
+		} else if pub, _ := b.d.Settings.String(ctx, settings.KeyPublicHost); pub != "" {
+			host = pub
+		} else if b.d.SubBase != nil {
+			if u, err := url.Parse(b.d.SubBase(ctx)); err == nil {
+				host = u.Hostname()
+			}
+		}
+	}
+	if host == "" {
+		var dom string
+		if raw, err := b.d.Store.Q.GetSetting(ctx, "domain"); err == nil {
+			_ = json.Unmarshal([]byte(raw), &dom)
+		}
+		if dom != "" {
+			host = dom
+		} else {
+			var pub string
+			if raw, err := b.d.Store.Q.GetSetting(ctx, "public_host"); err == nil {
+				_ = json.Unmarshal([]byte(raw), &pub)
+			}
+			if pub != "" {
+				host = pub
+			}
+		}
+	}
+	name := n.Name
+	if name == "" {
+		brand, _ := b.d.Settings.String(ctx, settings.KeyBrand)
+		if brand != "" {
+			name = brand
+		} else {
+			name = "FreeTurn"
+		}
+	}
 	peer := net.JoinHostPort(host, strconv.FormatInt(nft.ListenPort, 10))
 	node := subs.FreeTurnNode{
-		Name:       n.Name,
+		Name:       name,
 		Peer:       peer,
 		ObfProfile: nft.ObfProfile,
 		ObfKey:     nft.ObfKey,

@@ -830,17 +830,68 @@ func (h *Handler) freeTurnProfile(ctx context.Context, u db.User, slot db.Slot, 
 		if err != nil || n.Enabled == 0 {
 			continue
 		}
-		host := n.PublicHost
+		host := n.Domain
 		if host == "" {
+			host = n.PublicHost
+		}
+		if host == "" && n.Address != "" {
 			if h, _, err := net.SplitHostPort(n.Address); err == nil {
 				host = h
 			} else {
 				host = n.Address
 			}
 		}
+		if host == "" {
+			for _, sn := range cfg.Nodes {
+				if sn.ID == n.ID && sn.Endpoint.Host != "" {
+					host = sn.Endpoint.Host
+					break
+				}
+			}
+		}
+		if host == "" && len(cfg.Nodes) > 0 && cfg.Nodes[0].Endpoint.Host != "" {
+			host = cfg.Nodes[0].Endpoint.Host
+		}
+		if host == "" && len(cfg.Direct) > 0 {
+			for _, d := range cfg.Direct {
+				if d != "" {
+					host = d
+					break
+				}
+			}
+		}
+		if host == "" {
+			var dom string
+			if raw, err := h.st.Q.GetSetting(ctx, "domain"); err == nil {
+				_ = json.Unmarshal([]byte(raw), &dom)
+			}
+			if dom != "" {
+				host = dom
+			} else {
+				var pub string
+				if raw, err := h.st.Q.GetSetting(ctx, "public_host"); err == nil {
+					_ = json.Unmarshal([]byte(raw), &pub)
+				}
+				if pub != "" {
+					host = pub
+				}
+			}
+		}
+		if host == "" && cfg.SubBase != "" {
+			if u, err := url.Parse(cfg.SubBase); err == nil {
+				host = u.Hostname()
+			}
+		}
+		name := n.Name
+		if name == "" {
+			name = cfg.Brand
+			if name == "" {
+				name = "FreeTurn"
+			}
+		}
 		peer := net.JoinHostPort(host, strconv.FormatInt(nft.ListenPort, 10))
 		nodes = append(nodes, FreeTurnNode{
-			Name:       n.Name,
+			Name:       name,
 			Peer:       peer,
 			ObfProfile: nft.ObfProfile,
 			ObfKey:     nft.ObfKey,
