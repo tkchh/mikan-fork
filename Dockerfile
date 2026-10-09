@@ -38,7 +38,7 @@ RUN case "$TARGETARCH" in amd64) want="3e 00" ;; arm64) want="b7 00" ;; *) want=
     done
 # Non-root processes may bind 443 (node) and 80 (panel, ACME challenges) only through
 # file capabilities; compose keeps NET_BIND_SERVICE in the bounding set (S-04).
-RUN setcap cap_net_bind_service=+ep /usr/local/bin/mikan-node && \
+RUN setcap cap_net_bind_service,cap_net_admin=+ep /usr/local/bin/mikan-node && \
     setcap cap_net_bind_service=+ep /usr/local/bin/mikan && \
     mkdir -p /data /run/mikan && chown -R 65532:65532 /data /run/mikan && chmod 700 /data
 USER 65532:65532
