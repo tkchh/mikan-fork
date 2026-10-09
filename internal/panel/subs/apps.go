@@ -18,13 +18,14 @@ type Family string
 const (
 	FamilyMihomo  Family = "mihomo"  // Koala Clash, SlothClash, FlClash, Clash Verge, Clash Meta for Android, ClashFest…
 	FamilyXray    Family = "xray"    // Happ, v2RayTun, INCY, v2rayNG, v2rayN…
-	FamilySingBox Family = "singbox" // Hiddify, Karing, NekoBox, sing-box…
-	FamilyStash   Family = "stash"
-	FamilyOther   Family = "other" // Shadowrocket, Streisand and apps we do not know
+	FamilySingBox  Family = "singbox" // Hiddify, Karing, NekoBox, sing-box…
+	FamilyStash    Family = "stash"
+	FamilyFreeTurn Family = "freeturn" // FreeTurn, vk-turn-proxy Android app
+	FamilyOther    Family = "other"    // Shadowrocket, Streisand and apps we do not know
 )
 
 // Families in the order the admin panel lists them.
-var Families = []Family{FamilyMihomo, FamilyXray, FamilySingBox, FamilyStash, FamilyOther}
+var Families = []Family{FamilyMihomo, FamilyXray, FamilySingBox, FamilyStash, FamilyFreeTurn, FamilyOther}
 
 // App is a subscription client as its User-Agent describes it.
 type App struct {
@@ -119,6 +120,8 @@ func DetectApp(userAgent string) App {
 			a.Core = koalaCore(versionOf(m))
 		}
 		return a
+	case has("freeturn", "vk-turn-proxy", "turn-proxy"):
+		return App{Family: FamilyFreeTurn}
 	case has("happ", "v2raytun", "incy", "v2rayng", "v2rayn", "onexray", "v2box", "simplexray", "renoarx"):
 		return App{Family: FamilyXray}
 	}
@@ -183,6 +186,8 @@ func (a App) Supports(n proto.Needs) bool {
 		case "vless", "vmess", "trojan", "hysteria2", "tuic", "anytls", "shadowsocks", "snell":
 			return true
 		}
+	case FamilyFreeTurn:
+		return false
 	default: // what a share link can carry
 		if n.Gecko {
 			return false

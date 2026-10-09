@@ -43,6 +43,28 @@ type DesiredState struct {
 	// Filters keep users' traffic from places and strangers from the node; nil: none.
 	// Nodes older than the filters ignore it.
 	Filters *Filters `json:"filters,omitempty"`
+	// FreeTurn runs the vk-turn-proxy sidecar and WireGuard tunnel on the node; nil: disabled.
+	FreeTurn *FreeTurnConfig `json:"freeturn,omitempty"`
+}
+
+// FreeTurnConfig defines the vk-turn-proxy service and its WireGuard backend.
+type FreeTurnConfig struct {
+	Enabled    bool           `json:"enabled"`
+	ListenPort int            `json:"listen_port"` // UDP port for vk-turn-proxy (e.g. 56392)
+	ObfProfile string         `json:"obf_profile"` // e.g. "rtpopus3"
+	ObfKey     string         `json:"obf_key"`
+	WgPort     int            `json:"wg_port"`     // local WireGuard port (e.g. 51820)
+	WgNetwork  string         `json:"wg_network"`  // e.g. "10.13.13.0/24"
+	Peers      []FreeTurnPeer `json:"peers"`
+}
+
+// FreeTurnPeer is one authorized client peer for FreeTurn and WireGuard.
+type FreeTurnPeer struct {
+	SlotName   string `json:"slot_name"`
+	ClientID   string `json:"client_id"`   // 32-char hex token for clients.json
+	PublicKey  string `json:"public_key"`  // WireGuard peer public key
+	AllowedIP  string `json:"allowed_ip"`  // e.g. "10.13.13.2/32"
+	Allowed    bool   `json:"allowed"`     // true if user is active and within quota
 }
 
 // Filters are the ingress and egress filters of the node.

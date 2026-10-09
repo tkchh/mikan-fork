@@ -1,6 +1,6 @@
 export type Platform = "ios" | "android" | "windows" | "macos" | "linux";
 
-type App = { name: string; note: "easiest" | "free" | "stable" | "openSource" | "modern" | "bestWindows" | "tun" | "oneButton" | "allProtocols"; link: (url: string, brand: string, happ?: string) => string };
+type App = { name: string; note: "easiest" | "free" | "stable" | "openSource" | "modern" | "bestWindows" | "tun" | "oneButton" | "allProtocols"; link: (url: string, brand: string, happ?: string, freeturn?: string) => string };
 export const enc = encodeURIComponent;
 const clash = (url: string, brand: string) => `clash://install-config?url=${enc(url)}&name=${enc(brand)}`;
 const slothClash = (url: string, brand: string) => `slothclash://install-config?url=${enc(url)}&name=${enc(brand)}`;
@@ -15,6 +15,7 @@ export const APPS: Record<Platform, App[]> = {
     { name: "v2RayTun", note: "stable", link: (u) => `v2raytun://import/${u}` },
   ],
   android: [
+    { name: "FreeTurn (VK Calls)", note: "oneButton", link: (u, _b, _h, ft) => ft || `${u}?format=freeturn` },
     { name: "Happ", note: "easiest", link: happ },
     { name: "ClashFest", note: "allProtocols", link: (u, b) => `clashfest://install-config?url=${enc(u)}&name=${enc(b)}` },
     { name: "INCY", note: "modern", link: (u) => `incy://add/${u}` },

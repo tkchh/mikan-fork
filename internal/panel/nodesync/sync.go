@@ -242,6 +242,9 @@ func (s *Syncer) desired(ctx context.Context) (nodeapi.DesiredState, error) {
 	st.Torrent = snap.torrent.Block()
 	st.Filters = snap.filters.State()
 	st.Epoch, st.Policies, _ = s.policiesFrom(snap)
+	if st.FreeTurn, err = s.freeturn(ctx, n); err != nil {
+		return st, err
+	}
 	return st, nil
 }
 
@@ -744,16 +747,17 @@ func (s *Syncer) refreshHealth(ctx context.Context) {
 
 func stateKey(st nodeapi.DesiredState) string {
 	raw, _ := json.Marshal(struct {
-		I []nodeapi.Inbound
-		S []nodeapi.Slot
-		T *nodeapi.TLSFiles
-		P int
-		W *nodeapi.Warp
-		R *nodeapi.Relay
-		E []nodeapi.Exit
-		B *nodeapi.TorrentBlock
-		F *nodeapi.Filters
-	}{st.Inbounds, st.Slots, st.TLS, st.SelfStealPort, st.Warp, st.Relay, st.Exits, st.Torrent, st.Filters})
+		I  []nodeapi.Inbound
+		S  []nodeapi.Slot
+		T  *nodeapi.TLSFiles
+		P  int
+		W  *nodeapi.Warp
+		R  *nodeapi.Relay
+		E  []nodeapi.Exit
+		B  *nodeapi.TorrentBlock
+		F  *nodeapi.Filters
+		FT *nodeapi.FreeTurnConfig
+	}{st.Inbounds, st.Slots, st.TLS, st.SelfStealPort, st.Warp, st.Relay, st.Exits, st.Torrent, st.Filters, st.FreeTurn})
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
 }
@@ -799,6 +803,40 @@ func (s *Syncer) warp(ctx context.Context, n db.Node, inbounds []db.Inbound) (*n
 		out.Inbounds = append(out.Inbounds, nodeapi.RelayListener)
 	}
 	return out, nil
+}
+
+// freeturn is the node's FreeTurn (vk-turn-proxy) sidecar and WireGuard configuration, nil when disabled.
+func (s *Syncer) freeturn(ctx context.Context, n db.Node) (*nodeapi.FreeTurnConfig, error) {
+	ft, err := s.m.st.Q.GetNodeFreeTurn(ctx, n.ID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && ft.Enabled == 0) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	peers, err := s.m.st.Q.ListFreeTurnPeersForNode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nodePeers := make([]nodeapi.FreeTurnPeer, len(peers))
+	for i, p := range peers {
+		nodePeers[i] = nodeapi.FreeTurnPeer{
+			SlotName:  p.SlotName,
+			ClientID:  p.ClientID,
+			PublicKey: p.WgPubkey,
+			AllowedIP: p.WgIp,
+			Allowed:   p.Allowed,
+		}
+	}
+	return &nodeapi.FreeTurnConfig{
+		Enabled:    true,
+		ListenPort: int(ft.ListenPort),
+		ObfProfile: ft.ObfProfile,
+		ObfKey:     ft.ObfKey,
+		WgPort:     int(ft.WgPort),
+		WgNetwork:  ft.WgNetwork,
+		Peers:      nodePeers,
+	}, nil
 }
 
 // Warp asks the node how it reaches the internet through WARP; force skips the node's

@@ -9,6 +9,8 @@ export type Info = {
   support_url?: string;
   /** Happ's crypt link: the Happ button opens it, hiding the subscription address. */
   happ_link?: string;
+  /** FreeTurn's deep link (freeturn://...) with embedded WireGuard config. */
+  freeturn_link?: string;
   state: "active" | "expiring" | "limited" | "expired" | "disabled";
   used_up: number;
   used_down: number;

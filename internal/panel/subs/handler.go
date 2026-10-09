@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -323,6 +324,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.PathEscape(fileName(profileTitle(cfg, vars)))+".json")
 		_, _ = w.Write(body)
+	case "freeturn":
+		body, err := h.freeTurnProfile(r.Context(), u, slot, cfg, vars)
+		if errors.Is(err, ErrNoProxies) {
+			h.stub(w, u, cfg, format, err)
+			return
+		}
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.PathEscape(fileName(profileTitle(cfg, vars)))+".md")
+		_, _ = w.Write([]byte(body))
 	default:
 		links, err := URIs(prof)
 		if errors.Is(err, ErrNoProxies) {
@@ -800,6 +814,120 @@ func (h *Handler) profile(ctx context.Context, u db.User, cfg Config, slot db.Sl
 	return prof, nil
 }
 
+// freeTurnProfile renders the FreeTurn (sub.md) profile for the user.
+func (h *Handler) freeTurnProfile(ctx context.Context, u db.User, slot db.Slot, cfg Config, vars map[string]string) (string, error) {
+	nodeFTs, err := h.st.Q.ListNodeFreeTurn(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(nodeFTs) == 0 {
+		return "", ErrNoProxies
+	}
+
+	var nodes []FreeTurnNode
+	for _, nft := range nodeFTs {
+		n, err := h.st.Q.GetNode(ctx, nft.NodeID)
+		if err != nil || n.Enabled == 0 {
+			continue
+		}
+		host := n.PublicHost
+		if host == "" {
+			host = n.Address
+		}
+		peer := net.JoinHostPort(host, strconv.FormatInt(nft.ListenPort, 10))
+		nodes = append(nodes, FreeTurnNode{
+			Name:       n.Name,
+			Peer:       peer,
+			ObfProfile: nft.ObfProfile,
+			ObfKey:     nft.ObfKey,
+			WgPubKey:   nft.WgPubkey,
+		})
+	}
+	if len(nodes) == 0 {
+		return "", ErrNoProxies
+	}
+
+	fts, err := h.st.Q.GetUserFreeTurn(ctx, u.ID)
+	if err != nil {
+		return "", err
+	}
+	var client FreeTurnClient
+	if len(fts) > 0 {
+		client = FreeTurnClient{
+			ClientID:   fts[0].ClientID,
+			WgPrivKey:  fts[0].WgPrivkey,
+			WgIP:       fts[0].WgIp,
+			ClientName: u.Name,
+		}
+	} else {
+		cid, err := GenerateClientID()
+		if err != nil {
+			return "", err
+		}
+		privKey, pubKey, err := GenerateWireGuardKeypair()
+		if err != nil {
+			return "", err
+		}
+		usedIPs, err := h.st.Q.ListUsedFreeTurnIPs(ctx)
+		if err != nil {
+			return "", err
+		}
+		netCIDR := nodeFTs[0].WgNetwork
+		if netCIDR == "" {
+			netCIDR = "10.13.13.0/24"
+		}
+		wgIP, err := NextFreeIP(usedIPs, netCIDR)
+		if err != nil {
+			return "", err
+		}
+		slotID := slot.ID
+		if slotID == 0 {
+			if u.SlotID.Valid {
+				slotID = u.SlotID.Int64
+			} else {
+				slotID = 1
+			}
+		}
+		newFT, err := h.st.Q.CreateUserFreeTurn(ctx, db.CreateUserFreeTurnParams{
+			UserID:     u.ID,
+			SlotID:     slotID,
+			ClientID:   cid,
+			WgPubkey:   pubKey,
+			WgPrivkey:  privKey,
+			WgIp:       wgIP,
+			DeviceName: "FreeTurn Client",
+			CreatedAt:  h.now().Unix(),
+		})
+		if err != nil {
+			fts, err = h.st.Q.GetUserFreeTurn(ctx, u.ID)
+			if err != nil || len(fts) == 0 {
+				return "", err
+			}
+			client = FreeTurnClient{
+				ClientID:   fts[0].ClientID,
+				WgPrivKey:  fts[0].WgPrivkey,
+				WgIP:       fts[0].WgIp,
+				ClientName: u.Name,
+			}
+		} else {
+			client = FreeTurnClient{
+				ClientID:   newFT.ClientID,
+				WgPrivKey:  newFT.WgPrivkey,
+				WgIP:       newFT.WgIp,
+				ClientName: u.Name,
+			}
+		}
+	}
+
+	title := profileTitle(cfg, vars)
+	var totalBytes int64
+	if u.TrafficLimit.Valid {
+		totalBytes = u.TrafficLimit.Int64
+	}
+	usedBytes := u.UsedUp + u.UsedDown
+	return BuildFreeTurnSub(title, usedBytes, totalBytes, nodes, client), nil
+}
+
 // userInfoHeaders: the traffic and term apps show. With traffic packages left the total
 // is what the user can reach: what is used plus what is left.
 func (h *Handler) userInfoHeaders(w http.ResponseWriter, u db.User, grants int64, cfg Config, vars map[string]string) {
@@ -877,6 +1005,8 @@ type Info struct {
 	// HappLink is the Happ button's crypt link: the app opens the subscription without
 	// showing its address. Absent: the plain happ://add/ link.
 	HappLink string `json:"happ_link,omitempty"`
+	// FreeTurnLink is the 1-click freeturn:// deep link with embedded WireGuard config
+	FreeTurnLink string `json:"freeturn_link,omitempty"`
 }
 
 // DeviceItem is a bound device as the subscription page lists it.
@@ -914,6 +1044,17 @@ func (h *Handler) info(ctx context.Context, w http.ResponseWriter, u db.User, pr
 			out.HappLink = link
 		} else {
 			h.warn("happ_link", "subscription: no Happ crypt link", "err", err)
+		}
+	}
+	if nodeFTs, err := h.st.Q.ListNodeFreeTurn(ctx); err == nil && len(nodeFTs) > 0 {
+		if subText, err := h.freeTurnProfile(ctx, u, db.Slot{}, cfg, nil); err == nil {
+			for _, line := range strings.Split(subText, "\n") {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "freeturn://") {
+					out.FreeTurnLink = line
+					break
+				}
+			}
 		}
 	}
 	if cfg.Binding {
@@ -1040,6 +1181,11 @@ func (h *Handler) stub(w http.ResponseWriter, u db.User, cfg Config, format stri
 		_, _ = w.Write(body)
 		return
 	}
+	if format == "freeturn" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("# name: " + name + "\n"))
+		return
+	}
 	link := "vless://00000000-0000-0000-0000-000000000000@127.0.0.1:1?encryption=none&type=tcp#" + url.PathEscape(name)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte(base64.StdEncoding.EncodeToString([]byte(link))))
@@ -1059,6 +1205,8 @@ func Format(userAgent, accept, query string) string {
 		return "uri"
 	case "singbox", "sing-box":
 		return "singbox"
+	case "freeturn", "vk":
+		return "freeturn"
 	case "html":
 		return "html"
 	}
@@ -1069,6 +1217,8 @@ func Format(userAgent, accept, query string) string {
 	switch app.Family {
 	case FamilyMihomo, FamilyStash:
 		return "clash"
+	case FamilyFreeTurn:
+		return "freeturn"
 	case FamilyXray, FamilySingBox:
 		return "uri"
 	}

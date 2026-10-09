@@ -670,6 +670,13 @@ func (r *Registry) poolOfListener(inName string) string {
 	return r.poolOf[inName]
 }
 
+// RecordPeerTraffic attributes traffic from an external tunnel (e.g. FreeTurn WireGuard) to a user slot.
+func (r *Registry) RecordPeerTraffic(slotName string, up, down int64) {
+	if s := r.lookup(slotName); s != nil {
+		s.count(up, down)
+	}
+}
+
 // countIn counts bytes to b (nil: the main quota) and cuts the bucket's connections once
 // its quota runs out.
 func (s *slot) countIn(b *bucket, up, down int64) {

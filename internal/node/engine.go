@@ -59,6 +59,8 @@ type Engine struct {
 	Reg *Registry
 	tun *Tunnel
 
+	freeturn *FreeTurnManager
+
 	mu         sync.Mutex // serializes Apply
 	savedShape string     // policyShape of the policies in the state file
 	savedAt    time.Time  // when the state file was written
@@ -166,6 +168,7 @@ func Start(o Options) (*Engine, error) {
 		dataDir: dataDir, home: home, log: log, version: version, started: time.Now(), allowPrivate: o.AllowPrivate,
 		listeners: map[string]nodeapi.ListenerStatus{},
 		errs:      map[string]string{}, marker: make(chan string, 8), sys: newSysSampler(),
+		freeturn:  NewFreeTurnManager(dataDir, log),
 	}
 	go e.pumpLogs()
 
@@ -311,6 +314,11 @@ func (e *Engine) Apply(st nodeapi.DesiredState) (nodeapi.ApplyResult, error) {
 	}
 	if err := e.saveState(st); err != nil {
 		e.log.Error("save state", "err", err)
+	}
+	if e.freeturn != nil {
+		if err := e.freeturn.Apply(st.FreeTurn, e.Reg); err != nil {
+			e.log.Warn("freeturn apply", "err", err)
+		}
 	}
 	return nodeapi.ApplyResult{Revision: st.Revision, Recreated: recreated, Listeners: statuses}, nil
 }
