@@ -892,6 +892,7 @@
     "shadowsocks_2022": "The classic: fast and understood by every app. One key for all clients",
     "sudoku": "Hides traffic as HTTP and text. One key for all clients",
     "snell": "The Surge app's protocol. One key for all clients",
+    "freeturn": "Obfuscated WireGuard over WebRTC TURN proxy for Android",
     "custom": "Your own mihomo protocol settings in the editor: any supported type and parameters"
   },
   "inbounds": {
@@ -1074,6 +1075,7 @@
       "xray": "Happ, v2RayTun, INCY",
       "singbox": "Hiddify, Karing",
       "stash": "Stash",
+      "freeturn": "FreeTurn (Android)",
       "other": "Shadowrocket and others"
     },
     "outbound": "Way out to the internet",

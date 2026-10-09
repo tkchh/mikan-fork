@@ -77,6 +77,7 @@ var All = []Info{
 	{ID: "shadowsocks_2022", Title: "Shadowsocks-2022", Summary: "Классика, быстрый. Один ключ на всех пользователей", Type: "shadowsocks", Network: "tcp", Port: "6443", Name: "shadowsocks", SubName: "Shadowsocks", Shared: true},
 	{ID: "sudoku", Title: "Sudoku", Summary: "Прячет трафик под HTTP и текст. Один ключ на всех пользователей", Type: "sudoku", Network: "tcp", Port: "7443", Name: "sudoku", SubName: "Sudoku", Apps: "mihomo", Shared: true},
 	{ID: "snell", Title: "Snell", Summary: "Протокол Surge. Один ключ на всех пользователей", Type: "snell", Network: "tcp", Port: "9443", Name: "snell", SubName: "Snell", Apps: "mihomo", Shared: true},
+	{ID: "freeturn", Title: "FreeTurn · VK TURN Proxy", Summary: "Обход блокировок через TURN-прокси и обфускацию WireGuard (WebRTC)", Type: "freeturn", Network: "udp", Port: "56392", Name: "freeturn", SubName: "FreeTurn", Apps: "freeturn"},
 	{ID: Custom, Title: "Свой конфиг", Summary: "Шаблон листенера mihomo в редакторе: любой поддерживаемый тип и параметры", Network: "", Port: "", Name: "custom", SubName: "Custom"},
 }
 

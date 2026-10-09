@@ -259,6 +259,44 @@ func (q *Queries) ListNodeFreeTurn(ctx context.Context) ([]NodeFreeturn, error) 
 	return items, nil
 }
 
+const listAllNodeFreeTurn = `-- name: ListAllNodeFreeTurn :many
+SELECT node_id, enabled, listen_port, obf_profile, obf_key, wg_port, wg_network, wg_pubkey, created_at, updated_at FROM node_freeturn ORDER BY node_id
+`
+
+func (q *Queries) ListAllNodeFreeTurn(ctx context.Context) ([]NodeFreeturn, error) {
+	rows, err := q.db.QueryContext(ctx, listAllNodeFreeTurn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NodeFreeturn{}
+	for rows.Next() {
+		var i NodeFreeturn
+		if err := rows.Scan(
+			&i.NodeID,
+			&i.Enabled,
+			&i.ListenPort,
+			&i.ObfProfile,
+			&i.ObfKey,
+			&i.WgPort,
+			&i.WgNetwork,
+			&i.WgPubkey,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsedFreeTurnIPs = `-- name: ListUsedFreeTurnIPs :many
 SELECT wg_ip FROM user_freeturn
 `

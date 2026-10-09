@@ -4,6 +4,9 @@ SELECT * FROM node_freeturn WHERE node_id = $1;
 -- name: ListNodeFreeTurn :many
 SELECT * FROM node_freeturn WHERE enabled = 1;
 
+-- name: ListAllNodeFreeTurn :many
+SELECT * FROM node_freeturn ORDER BY node_id;
+
 -- name: SaveNodeFreeTurn :exec
 INSERT INTO node_freeturn (node_id, enabled, listen_port, obf_profile, obf_key, wg_port, wg_network, wg_pubkey, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)

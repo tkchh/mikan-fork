@@ -204,7 +204,7 @@ export function EditDrawer({ inbound, onClose }: { inbound: Inbound | null; onCl
           options={[
             { value: "main", label: t("inbounds.tabMain") },
             ...(inbound?.xhttp ? [{ value: "xhttp" as const, label: t("inbounds.xhttp.tab") }] : []),
-            { value: "config", label: t("inbounds.tabConfig") },
+            ...(inbound?.preset !== "freeturn" ? [{ value: "config" as const, label: t("inbounds.tabConfig") }] : []),
           ]}
         />
         <div className="mt-4">

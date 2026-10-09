@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,7 +92,7 @@ type inboundOutput struct{ Body InboundView }
 
 type createInboundInput struct {
 	Body struct {
-		Preset string `json:"preset" enum:"vless_reality_xhttp,hysteria2,hysteria2_gecko,tuic_v5,vless_reality_vision,vless_reality_grpc,trojan_reality,vless_tls_xhttp,vless_tls_vision,anytls,vless_reality_xhttp_pq,trusttunnel,shadowquic,mieru,shadowsocks_2022,sudoku,snell,custom"`
+		Preset string `json:"preset" enum:"vless_reality_xhttp,hysteria2,hysteria2_gecko,tuic_v5,vless_reality_vision,vless_reality_grpc,trojan_reality,vless_tls_xhttp,vless_tls_vision,anytls,vless_reality_xhttp_pq,trusttunnel,shadowquic,mieru,shadowsocks_2022,sudoku,snell,freeturn,custom"`
 		NodeID int64  `json:"node_id,omitempty" minimum:"1" doc:"Нода; по умолчанию — своя нода панели"`
 		Port   string `json:"port,omitempty" pattern:"^[0-9]{1,5}(-[0-9]{1,5})?$"`
 		Dest   string `json:"dest,omitempty" maxLength:"255" doc:"host:port для REALITY"`
@@ -232,6 +234,20 @@ func (h *handlers) viewInbound(in db.Inbound, last map[int64]db.InboundEvent) In
 	return v
 }
 
+const freeTurnInboundBaseID int64 = 990000
+
+func isFreeTurnInbound(id int64) bool {
+	return id >= freeTurnInboundBaseID && id < freeTurnInboundBaseID+1000
+}
+
+func freeTurnNodeID(id int64) int64 {
+	return id - freeTurnInboundBaseID
+}
+
+func freeTurnInboundID(nodeID int64) int64 {
+	return freeTurnInboundBaseID + nodeID
+}
+
 func (h *handlers) listInbounds(ctx context.Context, _ *struct{}) (*inboundsOutput, error) {
 	rows, err := h.d.Store.Q.ListInbounds(ctx)
 	if err != nil {
@@ -244,6 +260,31 @@ func (h *handlers) listInbounds(ctx context.Context, _ *struct{}) (*inboundsOutp
 	out := &inboundsOutput{Body: make([]InboundView, 0, len(rows))}
 	for _, in := range rows {
 		out.Body = append(out.Body, h.viewInbound(in, last))
+	}
+	if allFT, err := h.d.Store.Q.ListAllNodeFreeTurn(ctx); err == nil {
+		for _, ft := range allFT {
+			status := "off"
+			if ft.Enabled != 0 {
+				status = "ok"
+			}
+			out.Body = append(out.Body, InboundView{
+				ID:          freeTurnInboundID(ft.NodeID),
+				NodeID:      ft.NodeID,
+				Name:        "freeturn",
+				Preset:      "freeturn",
+				Title:       "FreeTurn · VK TURN Proxy",
+				Port:        strconv.Itoa(int(ft.ListenPort)),
+				Enabled:     ft.Enabled != 0,
+				DisplayName: "FreeTurn",
+				SubName:     "FreeTurn",
+				Status:      status,
+				Type:        "freeturn",
+				Network:     "udp",
+				Apps:        []string{"freeturn"},
+				Dest:        fmt.Sprintf("WireGuard :%d (%s)", ft.WgPort, ft.ObfProfile),
+				UpdatedAt:   time.Unix(ft.UpdatedAt, 0).UTC(),
+			})
+		}
 	}
 	return out, nil
 }
@@ -268,6 +309,54 @@ func (h *handlers) validateInbound(ctx context.Context, in *validateInboundInput
 
 func (h *handlers) createInbound(ctx context.Context, in *createInboundInput) (*inboundOutput, error) {
 	b := in.Body
+	if b.Preset == "freeturn" {
+		nodeID := b.NodeID
+		if nodeID == 0 {
+			nodeID = 1
+		}
+		port := int64(56392)
+		if b.Port != "" {
+			if p, err := strconv.Atoi(b.Port); err == nil && p > 0 {
+				port = int64(p)
+			}
+		}
+		now := time.Now().Unix()
+		err := h.d.Store.Q.SaveNodeFreeTurn(ctx, db.SaveNodeFreeTurnParams{
+			NodeID:     nodeID,
+			Enabled:    1,
+			ListenPort: port,
+			ObfProfile: "rtpopus3",
+			ObfKey:     "9e76eda0cd8952c0f73000465d3e62846615ddf01becc46686113b781daa3cf8",
+			WgPort:     51820,
+			WgNetwork:  "10.13.13.0/24",
+			WgPubkey:   "kd/usf3zuT6/HYeKroPZPXRhcMRa5dIcKvL1OoIexV4=",
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("create freeturn", err)
+		}
+		if h.d.Changes != nil {
+			h.d.Changes.SlotsChanged()
+		}
+		return &inboundOutput{Body: InboundView{
+			ID:          freeTurnInboundID(nodeID),
+			NodeID:      nodeID,
+			Name:        "freeturn",
+			Preset:      "freeturn",
+			Title:       "FreeTurn · VK TURN Proxy",
+			Port:        strconv.Itoa(int(port)),
+			Enabled:     true,
+			DisplayName: "FreeTurn",
+			SubName:     "FreeTurn",
+			Status:      "ok",
+			Type:        "freeturn",
+			Network:     "udp",
+			Apps:        []string{"freeturn"},
+			Dest:        "WireGuard :51820 (rtpopus3)",
+			UpdatedAt:   time.Unix(now, 0).UTC(),
+		}}, nil
+	}
 	row, err := h.d.Inbounds.Create(ctx, domain.NewInbound{NodeID: b.NodeID, Preset: b.Preset, Port: b.Port, Dest: b.Dest, Config: b.Config})
 	if err != nil {
 		return nil, inboundError(err, false)
@@ -279,6 +368,69 @@ func (h *handlers) createInbound(ctx context.Context, in *createInboundInput) (*
 }
 
 func (h *handlers) updateInbound(ctx context.Context, in *patchInboundInput) (*inboundOutput, error) {
+	if isFreeTurnInbound(in.ID) {
+		nodeID := freeTurnNodeID(in.ID)
+		ft, err := h.d.Store.Q.GetNodeFreeTurn(ctx, nodeID)
+		if err != nil {
+			return nil, huma.Error404NotFound("freeturn not found")
+		}
+		b := in.Body
+		enabled := ft.Enabled
+		if b.Enabled != nil {
+			if *b.Enabled {
+				enabled = 1
+			} else {
+				enabled = 0
+			}
+		}
+		listenPort := ft.ListenPort
+		if b.Port != nil {
+			p, err := strconv.Atoi(*b.Port)
+			if err == nil && p > 0 && p <= 65535 {
+				listenPort = int64(p)
+			}
+		}
+		now := time.Now().Unix()
+		err = h.d.Store.Q.SaveNodeFreeTurn(ctx, db.SaveNodeFreeTurnParams{
+			NodeID:     nodeID,
+			Enabled:    enabled,
+			ListenPort: listenPort,
+			ObfProfile: ft.ObfProfile,
+			ObfKey:     ft.ObfKey,
+			WgPort:     ft.WgPort,
+			WgNetwork:  ft.WgNetwork,
+			WgPubkey:   ft.WgPubkey,
+			CreatedAt:  ft.CreatedAt,
+			UpdatedAt:  now,
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("save freeturn", err)
+		}
+		if h.d.Changes != nil {
+			h.d.Changes.SlotsChanged()
+		}
+		status := "off"
+		if enabled != 0 {
+			status = "ok"
+		}
+		return &inboundOutput{Body: InboundView{
+			ID:          in.ID,
+			NodeID:      nodeID,
+			Name:        "freeturn",
+			Preset:      "freeturn",
+			Title:       "FreeTurn · VK TURN Proxy",
+			Port:        strconv.Itoa(int(listenPort)),
+			Enabled:     enabled != 0,
+			DisplayName: "FreeTurn",
+			SubName:     "FreeTurn",
+			Status:      status,
+			Type:        "freeturn",
+			Network:     "udp",
+			Apps:        []string{"freeturn"},
+			Dest:        fmt.Sprintf("WireGuard :%d (%s)", ft.WgPort, ft.ObfProfile),
+			UpdatedAt:   time.Unix(now, 0).UTC(),
+		}}, nil
+	}
 	b := in.Body
 	// How a name may look is the subscription's rule; that it is free, the domain's.
 	if b.DisplayName != nil {
@@ -419,6 +571,17 @@ func portError(err error) error {
 }
 
 func (h *handlers) deleteInbound(ctx context.Context, in *userIDInput) (*struct{}, error) {
+	if isFreeTurnInbound(in.ID) {
+		nodeID := freeTurnNodeID(in.ID)
+		if err := h.d.Store.Q.DeleteNodeFreeTurn(ctx, nodeID); err != nil {
+			return nil, huma.Error500InternalServerError("delete freeturn", err)
+		}
+		if h.d.Changes != nil {
+			h.d.Changes.SlotsChanged()
+		}
+		h.audit(ctx, sessionOf(ctx).AdminID, "inbound.delete", "inbound", "freeturn", nil)
+		return nil, nil
+	}
 	row, err := h.d.Store.Q.GetInbound(ctx, in.ID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, huma.Error404NotFound("not_found")

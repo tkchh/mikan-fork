@@ -892,6 +892,7 @@
     "shadowsocks_2022": "Классика, быстрый и понятный всем приложениям. Один ключ на всех клиентов",
     "sudoku": "Прячет трафик под HTTP и текст. Один ключ на всех клиентов",
     "snell": "Протокол приложения Surge. Один ключ на всех клиентов",
+    "freeturn": "Обход блокировок через TURN-прокси и обфускацию WireGuard (WebRTC) для Android",
     "custom": "Свои настройки протокола mihomo в редакторе: любой поддерживаемый тип и параметры"
   },
   "inbounds": {
@@ -1074,6 +1075,7 @@
       "xray": "Happ, v2RayTun, INCY",
       "singbox": "Hiddify, Karing",
       "stash": "Stash",
+      "freeturn": "FreeTurn (Android)",
       "other": "Shadowrocket и другие"
     },
     "outbound": "Выход в интернет",
