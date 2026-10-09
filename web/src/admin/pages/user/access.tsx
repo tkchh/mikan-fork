@@ -235,7 +235,7 @@ export function FreeTurnSection({ u }: { u: User }) {
           <div className="pt-1">
             <Button
               size="sm"
-              variant="secondary"
+              variant="glass"
               loading={resetMutation.isPending}
               onClick={() =>
                 resetMutation.mutate(u.id, {
